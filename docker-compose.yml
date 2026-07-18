@@ -1,0 +1,86 @@
+name: threadline
+
+services:
+  app:
+    image: ${THREADLINE_IMAGE:-threadline:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ${THREADLINE_ENV_FILE:-.env}
+    environment:
+      ALLOW_INSECURE_LOCAL: ${ALLOW_INSECURE_LOCAL:-false}
+      DATABASE_URL: file:/data/threadline.db
+      HOSTNAME: 0.0.0.0
+      NODE_ENV: production
+      PORT: 3000
+    volumes:
+      - ${THREADLINE_DATA_DIR:-./data}:/data
+    expose:
+      - "3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:3000/api/health')
+          .then(r=>{if(!r.ok)process.exit(1)})
+          .catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      THREADLINE_SITE_ADDRESS: ${THREADLINE_SITE_ADDRESS:-http://localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    security_opt:
+      - no-new-privileges:true
+
+  cleanup:
+    image: ${THREADLINE_IMAGE:-threadline:local}
+    profiles:
+      - maintenance
+    restart: "no"
+    depends_on:
+      app:
+        condition: service_healthy
+    env_file:
+      - ${THREADLINE_ENV_FILE:-.env}
+    command:
+      - node
+      - -e
+      - >-
+        fetch('http://app:3000/api/maintenance/cleanup', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + process.env.CLEANUP_SECRET }
+        }).then(async response => {
+          if (!response.ok) throw new Error('Cleanup failed with HTTP ' + response.status);
+          process.stdout.write(await response.text());
+        }).catch(error => {
+          process.stderr.write(error.message + '\n');
+          process.exit(1);
+        })
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,148 @@
+name: Publish and deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_to_ecs:
+        description: Deploy the published image to the configured ECS host
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: threadline-production
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish image to Alibaba ACR
+    runs-on: ubuntu-24.04
+    environment: production
+    outputs:
+      image: ${{ steps.image.outputs.value }}
+      reference: ${{ steps.image.outputs.value }}@${{ steps.build.outputs.digest }}
+    env:
+      ACR_NAMESPACE: ${{ secrets.ALIBABA_ACR_NAMESPACE }}
+      ACR_PASSWORD: ${{ secrets.ALIBABA_ACR_PASSWORD }}
+      ACR_REGISTRY: ${{ secrets.ALIBABA_ACR_REGISTRY }}
+      ACR_USERNAME: ${{ secrets.ALIBABA_ACR_USERNAME }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate ACR configuration
+        shell: bash
+        run: |
+          test -n "$ACR_REGISTRY"
+          test -n "$ACR_NAMESPACE"
+          test -n "$ACR_USERNAME"
+          test -n "$ACR_PASSWORD"
+
+      - name: Log in to Alibaba ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_REGISTRY }}
+          username: ${{ env.ACR_USERNAME }}
+          password: ${{ env.ACR_PASSWORD }}
+
+      - name: Set versioned image tag
+        id: image
+        shell: bash
+        run: echo "value=$ACR_REGISTRY/$ACR_NAMESPACE/threadline:${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and publish image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.image.outputs.value }}
+
+  deploy:
+    name: Deploy to Alibaba ECS
+    if: inputs.deploy_to_ecs
+    needs: publish
+    runs-on: ubuntu-24.04
+    environment: production
+    env:
+      DEPLOY_PATH: ${{ secrets.ECS_DEPLOY_PATH }}
+      ECS_HOST: ${{ secrets.ECS_HOST }}
+      ECS_KNOWN_HOSTS: ${{ secrets.ECS_KNOWN_HOSTS }}
+      ECS_SSH_KEY: ${{ secrets.ECS_SSH_KEY }}
+      ECS_USER: ${{ secrets.ECS_USER }}
+      IMAGE: ${{ needs.publish.outputs.reference }}
+      PUBLIC_URL: ${{ vars.THREADLINE_PUBLIC_URL }}
+      SITE_ADDRESS: ${{ vars.THREADLINE_SITE_ADDRESS }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate ECS configuration
+        shell: bash
+        run: |
+          test -n "$DEPLOY_PATH"
+          test -n "$ECS_HOST"
+          test -n "$ECS_KNOWN_HOSTS"
+          test -n "$ECS_SSH_KEY"
+          test -n "$ECS_USER"
+          test -n "$PUBLIC_URL"
+          test -n "$SITE_ADDRESS"
+
+      - name: Configure SSH
+        shell: bash
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ECS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$ECS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Create deployment configuration
+        shell: bash
+        run: |
+          printf '%s\n' \
+            "THREADLINE_IMAGE=$IMAGE" \
+            "THREADLINE_ENV_FILE=$DEPLOY_PATH/secrets/app.env" \
+            "THREADLINE_DATA_DIR=$DEPLOY_PATH/data" \
+            "THREADLINE_SITE_ADDRESS=$SITE_ADDRESS" \
+            > .deploy.env
+
+      - name: Copy deployment files
+        shell: bash
+        run: |
+          ssh "$ECS_USER@$ECS_HOST" "mkdir -p '$DEPLOY_PATH'"
+          scp docker-compose.yml Caddyfile .deploy.env \
+            "$ECS_USER@$ECS_HOST:$DEPLOY_PATH/"
+
+      - name: Roll out application
+        shell: bash
+        run: |
+          ssh "$ECS_USER@$ECS_HOST" "DEPLOY_PATH='$DEPLOY_PATH' bash -s" <<'REMOTE'
+          set -eu
+          cd "$DEPLOY_PATH"
+          restart_previous_app() {
+            docker compose --env-file .deploy.env start app >/dev/null 2>&1 || true
+          }
+          trap restart_previous_app EXIT
+
+          docker compose --env-file .deploy.env stop app
+          install -d -m 0750 backups
+          if [ -f data/threadline.db ]; then
+            backup="backups/threadline-$(date -u +%Y%m%dT%H%M%SZ).db"
+            cp --preserve=timestamps data/threadline.db "$backup"
+            test -s "$backup"
+          fi
+
+          docker compose --env-file .deploy.env pull app
+          docker compose --env-file .deploy.env up -d --remove-orphans
+          docker compose --env-file .deploy.env ps
+          trap - EXIT
+          REMOTE
+
+      - name: Verify public health endpoint
+        shell: bash
+        run: curl --fail --retry 12 --retry-delay 5 "$PUBLIC_URL/api/health"

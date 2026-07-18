@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "corpusVersion": "threadline-synthetic-v1",
+  "generatedAt": "2026-07-18",
+  "benchmark": {
+    "kind": "deterministic-regression",
+    "adapter": "DeterministicQwenAdapter",
+    "syntheticDataOnly": true,
+    "liveModelAccuracy": false
+  },
+  "thresholds": {
+    "extractionPrecision": 0.85,
+    "extractionRecall": 0.8,
+    "retrievalHitAt5": 0.9
+  },
+  "metrics": {
+    "extraction": {
+      "precision": 0.974025974025974,
+      "recall": 0.9615384615384616,
+      "truePositives": 75,
+      "falsePositives": 2,
+      "falseNegatives": 3,
+      "caseCount": 20
+    },
+    "retrieval": {
+      "hitAt5": 1,
+      "hits": 10,
+      "caseCount": 10
+    }
+  },
+  "coverage": {
+    "categories": [
+      "context",
+      "coping_strategy",
+      "follow_up",
+      "goal",
+      "preference",
+      "symptom",
+      "trigger"
+    ],
+    "specialCases": ["correction", "negation", "prompt-like-text"],
+    "profiles": [
+      "synthetic-avery",
+      "synthetic-jordan",
+      "synthetic-maya",
+      "synthetic-noah",
+      "synthetic-riley"
+    ]
+  },
+  "passed": true,
+  "cases": {
+    "extraction": [
+      { "id": "work-meeting-baseline", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "schedule-and-family", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "sleep-correction", "truePositives": 3, "falsePositives": 1, "falseNegatives": 0 },
+      { "id": "prompt-like-transcript", "truePositives": 3, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "negated-preferences", "truePositives": 2, "falsePositives": 0, "falseNegatives": 2 },
+      { "id": "music-and-commute", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "family-dinner", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "evening-routine", "truePositives": 3, "falsePositives": 1, "falseNegatives": 1 },
+      { "id": "presentation-plan", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "weekend-check-in", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "balcony-routine", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "ceramics-schedule", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "appointment-preparation", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "phone-call-recovery", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "home-cooking", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "airport-planning", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "study-draft", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "family-call-boundary", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "screen-breaks", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 },
+      { "id": "volunteer-role-clarity", "truePositives": 4, "falsePositives": 0, "falseNegatives": 0 }
+    ],
+    "retrieval": [
+      {
+        "id": "remember-meeting-breathing",
+        "expectedMemoryId": "memory-paced-breathing",
+        "selectedMemoryIds": ["memory-paced-breathing", "memory-late-messages", "memory-evening-journal", "memory-crowded-trains", "memory-written-feedback"],
+        "hitAt5": true
+      },
+      {
+        "id": "remember-feedback-format",
+        "expectedMemoryId": "memory-written-feedback",
+        "selectedMemoryIds": ["memory-written-feedback", "memory-crowded-trains", "memory-late-messages", "memory-paced-breathing", "memory-phone-goal"],
+        "hitAt5": true
+      },
+      {
+        "id": "remember-phone-routine",
+        "expectedMemoryId": "memory-phone-goal",
+        "selectedMemoryIds": ["memory-phone-goal", "memory-crowded-trains", "memory-boundary-followup", "memory-paced-breathing", "memory-sunday-checkin"],
+        "hitAt5": true
+      },
+      {
+        "id": "remember-commute-trigger",
+        "expectedMemoryId": "memory-crowded-trains",
+        "selectedMemoryIds": ["memory-crowded-trains", "memory-phone-goal", "memory-paced-breathing", "memory-boundary-followup", "memory-written-feedback"],
+        "hitAt5": true
+      },
+      {
+        "id": "remember-late-message-symptom",
+        "expectedMemoryId": "memory-late-messages",
+        "selectedMemoryIds": ["memory-late-messages", "memory-paced-breathing", "memory-crowded-trains", "memory-written-feedback", "memory-phone-goal"],
+        "hitAt5": true
+      },
+      {
+        "id": "remember-sister-context",
+        "expectedMemoryId": "memory-sunday-checkin",
+        "selectedMemoryIds": ["memory-sunday-checkin", "memory-crowded-trains", "memory-boundary-followup", "memory-phone-goal", "memory-paced-breathing"],
+        "hitAt5": true
+      },
+      {
+        "id": "remember-manager-followup",
+        "expectedMemoryId": "memory-boundary-followup",
+        "selectedMemoryIds": ["memory-boundary-followup", "memory-paced-breathing", "memory-phone-goal", "memory-crowded-trains", "memory-late-messages"],
+        "hitAt5": true
+      },
+      {
+        "id": "remember-journal-routine",
+        "expectedMemoryId": "memory-evening-journal",
+        "selectedMemoryIds": ["memory-evening-journal", "memory-paced-breathing", "memory-crowded-trains", "memory-written-feedback", "memory-late-messages"],
+        "hitAt5": true
+      },
+      {
+        "id": "remember-room-preference",
+        "expectedMemoryId": "memory-quiet-room",
+        "selectedMemoryIds": ["memory-quiet-room", "memory-paced-breathing", "memory-crowded-trains", "memory-written-feedback", "memory-evening-journal"],
+        "hitAt5": true
+      },
+      {
+        "id": "remember-weekend-context",
+        "expectedMemoryId": "memory-weekend-apartment",
+        "selectedMemoryIds": ["memory-weekend-apartment", "memory-crowded-trains", "memory-phone-goal", "memory-paced-breathing", "memory-boundary-followup"],
+        "hitAt5": true
+      }
+    ]
+  }
+}

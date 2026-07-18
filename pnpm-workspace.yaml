@@ -1,0 +1,12 @@
+packages:
+  - "."
+
+minimumReleaseAge: 1440
+
+trustPolicy: no-downgrade
+
+onlyBuiltDependencies:
+  - better-sqlite3
+  - esbuild
+  - sharp
+  - unrs-resolver

@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_URL: http://127.0.0.1:3000
+  CLEANUP_SECRET: ci-cleanup-secret-not-for-production
+  DATABASE_URL: file:./data/ci.db
+  NEXT_TELEMETRY_DISABLED: "1"
+  QWEN_API_KEY: ci-placeholder-key-not-used
+  QWEN_BASE_URL: http://127.0.0.1:4010/v1
+  SESSION_SECRET: ci-session-secret-at-least-32-characters
+
+jobs:
+  quality:
+    name: Lint, test, and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Verify color contract
+        run: pnpm check:colors
+
+      - name: Check types
+        run: pnpm typecheck
+
+      - name: Run unit and integration tests
+        run: pnpm test
+
+      - name: Verify coverage
+        run: pnpm test:coverage
+
+      - name: Run deterministic quality benchmark
+        run: pnpm evaluate
+
+      - name: Build production application
+        run: pnpm build
+
+      - name: Run React Doctor
+        run: pnpm dlx react-doctor@latest --verbose --scope changed
+
+  browser:
+    name: Browser tests
+    needs: quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.14.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run browser tests
+        run: pnpm test:e2e
+
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diagnostics
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7
