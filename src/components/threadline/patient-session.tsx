@@ -18,6 +18,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import {
   InputGroup,
@@ -88,12 +96,15 @@ export function PatientSession({ initialSessionId }: { initialSessionId?: string
   const [session, setSession] = useState<TherapySession | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([welcomeMessage])
   const [trace, setTrace] = useState<RetrievalTrace | null>(null)
+  const [traceHasRun, setTraceHasRun] = useState(false)
   const [draft, setDraft] = useState("")
   const [loading, setLoading] = useState(true)
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [highRisk, setHighRisk] = useState(false)
   const [completed, setCompleted] = useState(false)
+  const [confirmEnd, setConfirmEnd] = useState(false)
+  const [failedContent, setFailedContent] = useState<string | null>(null)
   const [isFinalizing, startFinalizing] = useTransition()
   const mounted = useRef(true)
 
@@ -111,7 +122,17 @@ export function PatientSession({ initialSessionId }: { initialSessionId?: string
           : await createSession()
         if (!mounted.current) return
         setSession(nextSession)
-        if (nextSession.messages?.length) setMessages(nextSession.messages)
+        // A finalized or failed session is a receipt, not an active composer.
+        if (nextSession.status === "finalized" || nextSession.status === "failed") {
+          setCompleted(nextSession.status === "finalized")
+          if (nextSession.status === "failed") {
+            setError(
+              "This reflection could not be finalized. The stored transcript was not deleted and can be finalized again.",
+            )
+          }
+        } else if (nextSession.messages?.length) {
+          setMessages(nextSession.messages)
+        }
       } catch (cause) {
         if (mounted.current) {
           setError(
@@ -166,6 +187,7 @@ export function PatientSession({ initialSessionId }: { initialSessionId?: string
         },
         onTrace: setTrace,
         onDone: (message) => {
+          setTraceHasRun(true)
           if (!message?.content) return
           setMessages((current) =>
             current.map((item) =>
@@ -179,17 +201,28 @@ export function PatientSession({ initialSessionId }: { initialSessionId?: string
         cause instanceof ThreadlineApiError &&
         /RISK|SAFETY|CRISIS/.test(cause.code.toUpperCase())
       setHighRisk(isSafetyError)
+      // Restore the draft so a recoverable failure never loses what Maya typed.
+      if (!isSafetyError) {
+        setDraft(content)
+        setFailedContent(content)
+      }
       setError(
         isSafetyError
           ? "Threadline paused generated guidance because this may need immediate human support."
           : cause instanceof Error
-            ? cause.message
-            : "Qwen could not finish that response.",
+            ? `${cause.message} Your draft is still here.`
+            : "Qwen could not finish that response. Your draft is still here.",
       )
       setMessages((current) => current.filter((message) => message.id !== assistantId))
     } finally {
       setStreaming(false)
     }
+  }
+
+  const retryFailed = () => {
+    if (!failedContent) return
+    setError(null)
+    void send()
   }
 
   const submit = (event: FormEvent) => {
@@ -210,26 +243,30 @@ export function PatientSession({ initialSessionId }: { initialSessionId?: string
     startFinalizing(async () => {
       try {
         const result = await finalizeSession(session.id)
+        const deletedAt =
+          result.session?.transcriptDeletedAt ??
+          result.summary?.transcriptDeletedAt ??
+          null
         setSession((current) =>
           result.session ??
           (current
             ? {
                 ...current,
                 status: "finalized",
-                endedAt: new Date().toISOString(),
-                transcriptDeletedAt: new Date().toISOString(),
+                endedAt: current.endedAt ?? null,
+                transcriptDeletedAt: deletedAt,
               }
             : current),
         )
-        setTrace((current) =>
-          current ? { ...current, transcriptDeleted: true } : current,
-        )
+        // The transcript is deleted server-side on success, so clear the
+        // browser-rendered copy and replace it with a durable receipt.
+        setMessages([])
         setCompleted(true)
       } catch (cause) {
         setError(
           cause instanceof Error
             ? cause.message
-            : "The reflection could not be summarized. Your transcript is retained so you can retry.",
+            : "Threadline couldn't create the review package. The stored transcript was not deleted and can be finalized again.",
         )
       }
     })
@@ -275,25 +312,71 @@ export function PatientSession({ initialSessionId }: { initialSessionId?: string
                     </SheetDescription>
                   </SheetHeader>
                   <div className="min-h-0 flex-1 px-4 pb-4">
-                    <MemoryTrace trace={trace} showTitle={false} />
+                    <MemoryTrace trace={trace} hasRun={traceHasRun} showTitle={false} />
                   </div>
                 </SheetContent>
               </Sheet>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={endSession}
-                disabled={!session || streaming || isFinalizing || completed}
-              >
-                {isFinalizing ? (
-                  <Spinner data-icon="inline-start" />
-                ) : (
-                  <SquareIcon data-icon="inline-start" aria-hidden="true" />
-                )}
-                End session
-              </Button>
+              {!completed ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setConfirmEnd(true)}
+                  disabled={!session || streaming || isFinalizing}
+                >
+                  {isFinalizing ? (
+                    <Spinner data-icon="inline-start" />
+                  ) : (
+                    <SquareIcon data-icon="inline-start" aria-hidden="true" />
+                  )}
+                  End &amp; create review
+                </Button>
+              ) : null}
             </div>
           </header>
+
+          <p role="status" aria-live="polite" className="sr-only">
+            {isFinalizing
+              ? "Creating the review package and removing the stored transcript…"
+              : streaming
+                ? "Qwen is responding…"
+                : completed
+                  ? "Response complete. Review package ready."
+                  : ""}
+          </p>
+
+          <Dialog open={confirmEnd} onOpenChange={setConfirmEnd}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>End this reflection and create the review package?</DialogTitle>
+                <DialogDescription>
+                  Threadline will create a summary and a small set of proposed memories
+                  for Dr. Chen. If that succeeds, the stored raw transcript is
+                  permanently removed. This cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setConfirmEnd(false)}
+                  disabled={isFinalizing}
+                >
+                  Keep reflecting
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setConfirmEnd(false)
+                    endSession()
+                  }}
+                  disabled={isFinalizing}
+                >
+                  {isFinalizing ? <Spinner data-icon="inline-start" /> : null}
+                  End &amp; create review
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {highRisk ? (
             <Alert variant="destructive">
@@ -309,18 +392,28 @@ export function PatientSession({ initialSessionId }: { initialSessionId?: string
             <Alert variant="destructive">
               <CircleAlertIcon aria-hidden="true" />
               <AlertTitle>The session needs your attention</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription className="flex flex-col items-start gap-3">
+                <span>{error}</span>
+                {failedContent ? (
+                  <Button type="button" variant="outline" onClick={retryFailed}>
+                    Try sending again
+                  </Button>
+                ) : null}
+              </AlertDescription>
             </Alert>
           ) : null}
 
           {completed ? (
             <Alert>
               <CheckCircle2Icon aria-hidden="true" />
-              <AlertTitle>Session ready for review</AlertTitle>
+              <AlertTitle>Review package created</AlertTitle>
               <AlertDescription className="flex flex-col items-start gap-3">
                 <span>
-                  Qwen created a summary and proposed memories. The raw transcript
-                  was deleted after the transaction completed.
+                  Qwen created a summary and proposed memories, now waiting for Dr.
+                  Chen.
+                  {session?.transcriptDeletedAt
+                    ? ` Stored transcript deleted ${formatDateTime(session.transcriptDeletedAt)}.`
+                    : " Transcript deletion was not confirmed by the server."}
                 </span>
                 <Button type="button" variant="outline" onClick={() => router.push("/patient")}>
                   Return to memory record
@@ -454,7 +547,7 @@ export function PatientSession({ initialSessionId }: { initialSessionId?: string
             </section>
 
             <aside className="threadline-app-surface hidden min-h-0 p-5 lg:block">
-              <MemoryTrace trace={trace} />
+              <MemoryTrace trace={trace} hasRun={traceHasRun} />
             </aside>
           </div>
         </div>
@@ -467,4 +560,18 @@ function formatTime(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return messageTimeFormatter.format(date)
+}
+
+const dateTimeFormatter = new Intl.DateTimeFormat("en", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+})
+
+function formatDateTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return dateTimeFormatter.format(date)
 }

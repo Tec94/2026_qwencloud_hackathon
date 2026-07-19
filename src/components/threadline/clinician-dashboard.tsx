@@ -6,6 +6,7 @@ import {
   CheckCheckIcon,
   ClipboardCheckIcon,
   Clock3Icon,
+  ShieldAlertIcon,
   ShieldCheckIcon,
 } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -79,6 +80,7 @@ export function ClinicianDashboard() {
 
   const ready = sessions.filter((session) => session.status === "finalized")
   const active = sessions.filter((session) => session.status === "active")
+  const safetyPriority = sessions.filter((session) => session.safetyFollowUp)
 
   return (
     <AppShell role="clinician">
@@ -121,6 +123,55 @@ export function ClinicianDashboard() {
               record silently.
             </AlertDescription>
           </Alert>
+
+          {!loading && safetyPriority.length > 0 ? (
+            <section aria-labelledby="safety-priority" className="flex flex-col gap-4">
+              <div className="flex items-center gap-3">
+                <ShieldAlertIcon className="text-destructive" aria-hidden="true" />
+                <div>
+                  <h2 id="safety-priority" className="font-heading text-2xl font-semibold">
+                    Safety-priority follow-up
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Deterministic support guidance was shown. Review these first.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                {safetyPriority.map((session) => (
+                  <Card key={session.id} size="sm" className="border-destructive/40">
+                    <CardHeader>
+                      <CardTitle>{session.patient?.displayName ?? "Maya"}</CardTitle>
+                      <CardDescription>
+                        Reflection started {formatDate(session.startedAt)}
+                      </CardDescription>
+                      <CardAction>
+                        <Badge variant="destructive">Immediate safety concern</Badge>
+                      </CardAction>
+                    </CardHeader>
+                    {session.safetyReasonCodes?.length ? (
+                      <CardContent>
+                        <p className="text-sm text-muted-foreground">
+                          Reason:{" "}
+                          <span className="font-medium text-foreground">
+                            {session.safetyReasonCodes.join(", ")}
+                          </span>
+                        </p>
+                      </CardContent>
+                    ) : null}
+                    <CardFooter className="justify-end">
+                      <Button asChild>
+                        <Link href={`/clinician/review?session=${encodeURIComponent(session.id)}`}>
+                          Review follow-up
+                          <ArrowRightIcon data-icon="inline-end" aria-hidden="true" />
+                        </Link>
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section aria-labelledby="queue-overview" className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
             <div className="threadline-app-surface p-5 sm:p-6">

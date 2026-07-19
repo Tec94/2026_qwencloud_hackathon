@@ -45,6 +45,8 @@ export interface TherapySession {
   startedAt: string
   endedAt?: string | null
   transcriptDeletedAt?: string | null
+  safetyFollowUp?: boolean
+  safetyReasonCodes?: string[]
   messageCount?: number
   patient?: Pick<ThreadlineUser, "id" | "displayName">
   messages?: ChatMessage[]
@@ -96,7 +98,6 @@ export interface RetrievalTrace {
   model?: string
   promptVersion?: string
   latencyMs?: number
-  transcriptDeleted?: boolean
 }
 
 export interface FinalizeResult {

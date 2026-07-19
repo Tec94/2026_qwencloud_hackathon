@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { apiData, enterPatientSession, sendReflection } from "./helpers";
+import { apiData, enterPatientSession, finalizeReflection, sendReflection } from "./helpers";
 
 test("completes the reviewed two-session memory loop and permanent forgetting", async (
   { page },
@@ -23,13 +23,13 @@ test("completes the reviewed two-session memory loop and permanent forgetting", 
   );
   await expect(page.getByText(/Thank you for sharing that/i).last()).toBeVisible();
 
-  await page.getByRole("button", { name: "End session" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "Session ready for review" })).toBeVisible({
+  await finalizeReflection(page);
+  await expect(page.getByRole("alert").filter({ hasText: "Review package created" })).toBeVisible({
     timeout: 20_000,
   });
-  await expect(page.getByText("Transcript deletion recorded")).toBeVisible();
+  await expect(page.getByText(/Stored transcript deleted/i)).toBeVisible();
 
-  await page.getByRole("button", { name: "Switch role" }).click();
+  await page.getByRole("button", { name: "View as Dr. Chen" }).click();
   await expect(page).toHaveURL(/\/clinician$/, { timeout: 20_000 });
   const clinicianIdentity = await apiData<{
     user: { id: string; role: string };
@@ -53,7 +53,7 @@ test("completes the reviewed two-session memory loop and permanent forgetting", 
   await breathingCard.getByRole("button", { name: "Approve memory" }).click();
   await expect(page.getByText("Available for relevant future retrieval.", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Switch role" }).click();
+  await page.getByRole("button", { name: "View as Maya" }).click();
   await expect(page).toHaveURL(/\/patient$/, { timeout: 20_000 });
   await expect(page.getByText(durableStatement)).toBeVisible();
 
@@ -87,7 +87,7 @@ test("completes the reviewed two-session memory loop and permanent forgetting", 
   );
   await expect(page.getByText(/Thank you for sharing that/i).last()).toBeVisible();
   const emptyTrace = page.locator("aside");
-  await expect(emptyTrace.getByText("No approved context selected")).toBeVisible();
+  await expect(emptyTrace.getByText("No eligible memory matched")).toBeVisible();
   await expect(
     emptyTrace.locator("dl > div").filter({ hasText: "Candidates" }).locator("dd"),
   ).toHaveText("0");

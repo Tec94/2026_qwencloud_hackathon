@@ -127,7 +127,7 @@ describe("PatientSession", () => {
       screen.getByRole("textbox", { name: "Share what is on your mind" }),
     ).toBeDisabled()
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled()
-    expect(screen.getByRole("button", { name: "End session" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "End & create review" })).toBeDisabled()
   })
 
   it("sends on Enter, streams into the live log, and displays the normalized trace", async () => {
@@ -214,7 +214,7 @@ describe("PatientSession", () => {
     ).toBe(false)
   })
 
-  it("finalizes through the exact action and visibly confirms transcript deletion", async () => {
+  it("confirms, finalizes, clears the transcript, and shows the server deletion receipt", async () => {
     const user = userEvent.setup()
     installSessionFetch(undefined, () =>
       response({
@@ -240,17 +240,24 @@ describe("PatientSession", () => {
       }),
     )
     render(<PatientSession initialSessionId="session-1" />)
-    const endSession = screen.getByRole("button", { name: "End session" })
+    const endSession = screen.getByRole("button", { name: "End & create review" })
     await waitFor(() => expect(endSession).toBeEnabled())
 
     await user.click(endSession)
 
-    expect(await screen.findByText("Session ready for review")).toBeVisible()
-    expect(screen.getByText(/raw transcript was deleted/i)).toBeVisible()
-    expect(endSession).toBeDisabled()
+    // The consequential action requires explicit confirmation.
+    const dialog = await screen.findByRole("dialog")
     expect(
-      screen.getByRole("textbox", { name: "Share what is on your mind" }),
-    ).toBeDisabled()
+      within(dialog).getByText(/permanently removed/i),
+    ).toBeVisible()
+    await user.click(within(dialog).getByRole("button", { name: "End & create review" }))
+
+    expect(await screen.findByText("Review package created")).toBeVisible()
+    expect(screen.getByText(/Stored transcript deleted/i)).toBeVisible()
+    expect(screen.getByText(/Jul 18, 2026/i)).toBeVisible()
+    expect(
+      screen.queryByRole("button", { name: "End & create review" }),
+    ).not.toBeInTheDocument()
   })
 
   it("replaces generated guidance with deterministic crisis support", async () => {
@@ -296,6 +303,6 @@ describe("PatientSession", () => {
 
     expect(await screen.findByText("The session needs your attention")).toBeVisible()
     expect(screen.getByText("That reflection no longer exists.")).toBeVisible()
-    expect(screen.getByRole("button", { name: "End session" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "End & create review" })).toBeDisabled()
   })
 })

@@ -31,6 +31,13 @@ export async function apiData<T>(response: APIResponse): Promise<T> {
     : payload;
 }
 
+export async function finalizeReflection(page: Page): Promise<void> {
+  await page.getByRole("button", { name: "End & create review" }).click();
+  const confirm = page.getByRole("dialog");
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole("button", { name: "End & create review" }).click();
+}
+
 export async function expectNoWcagAaViolations(
   page: Page,
   surface: string,

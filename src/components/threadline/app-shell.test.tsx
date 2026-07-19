@@ -14,6 +14,7 @@ const shellMocks = vi.hoisted(() => ({
   push: vi.fn(),
   refresh: vi.fn(),
   enterDemo: vi.fn(),
+  logout: vi.fn(),
 }))
 
 vi.mock("@/components/ui/tooltip", () => ({
@@ -37,7 +38,7 @@ vi.mock("./api-client", async () => {
   const actual = await vi.importActual<typeof import("./api-client")>(
     "./api-client",
   )
-  return { ...actual, enterDemo: shellMocks.enterDemo }
+  return { ...actual, enterDemo: shellMocks.enterDemo, logout: shellMocks.logout }
 })
 
 function renderShell(role: "patient" | "clinician", pathname: string) {
@@ -59,6 +60,8 @@ describe("AppShell", () => {
     shellMocks.push.mockReset()
     shellMocks.refresh.mockReset()
     shellMocks.enterDemo.mockReset()
+    shellMocks.logout.mockReset()
+    shellMocks.logout.mockResolvedValue({ success: true })
     window.sessionStorage.clear()
 
     // JSDOM does not load Tailwind's generated responsive utilities. Simulate
@@ -86,7 +89,7 @@ describe("AppShell", () => {
     expect(
       screen.getByRole("link", { name: "Reflection" }),
     ).toHaveAttribute("aria-current", "page")
-    expect(screen.getByText("patient view")).toBeVisible()
+    expect(screen.getByText("Maya")).toBeVisible()
   })
 
   it("marks the clinician queue root without treating review as active", () => {
@@ -101,7 +104,7 @@ describe("AppShell", () => {
     expect(
       screen.getByRole("link", { name: "Session review" }),
     ).not.toHaveAttribute("aria-current")
-    expect(screen.getByText("clinician view")).toBeVisible()
+    expect(screen.getByText("Dr. Chen")).toBeVisible()
   })
 
   it("switches from patient to clinician with the exact accessible action", async () => {
@@ -117,8 +120,8 @@ describe("AppShell", () => {
     })
     renderShell("patient", "/patient")
 
-    const switchRole = screen.getByRole("button", { name: "Switch role" })
-    expect(switchRole).toHaveAccessibleName("Switch role")
+    const switchRole = screen.getByRole("button", { name: "View as Dr. Chen" })
+    expect(switchRole).toHaveAccessibleName("View as Dr. Chen")
     await user.click(switchRole)
 
     await waitFor(() => expect(shellMocks.enterDemo).toHaveBeenCalledWith("clinician"))
@@ -138,7 +141,7 @@ describe("AppShell", () => {
     })
     renderShell("clinician", "/clinician")
 
-    await user.click(screen.getByRole("button", { name: "Switch role" }))
+    await user.click(screen.getByRole("button", { name: "View as Maya" }))
 
     await waitFor(() => expect(shellMocks.enterDemo).toHaveBeenCalledWith("patient"))
     await waitFor(() => expect(shellMocks.push).toHaveBeenCalledWith("/patient"))
@@ -153,11 +156,24 @@ describe("AppShell", () => {
     shellMocks.enterDemo.mockRejectedValue(new Error("Demo unavailable"))
     renderShell("patient", "/patient")
 
-    const switchRole = screen.getByRole("button", { name: "Switch role" })
+    const switchRole = screen.getByRole("button", { name: "View as Dr. Chen" })
     await user.click(switchRole)
 
     await waitFor(() => expect(shellMocks.push).toHaveBeenCalledWith("/"))
     expect(shellMocks.refresh).not.toHaveBeenCalled()
+    expect(window.sessionStorage.getItem("threadline:demo-workspace:v1")).toBeNull()
+  })
+
+  it("leaves the demo as a separate action from switching perspective", async () => {
+    const user = userEvent.setup()
+    window.sessionStorage.setItem("threadline:demo-workspace:v1", "workspace-9")
+    renderShell("patient", "/patient")
+
+    await user.click(screen.getByRole("button", { name: "Leave demo" }))
+
+    await waitFor(() => expect(shellMocks.logout).toHaveBeenCalledOnce())
+    await waitFor(() => expect(shellMocks.push).toHaveBeenCalledWith("/"))
+    expect(shellMocks.enterDemo).not.toHaveBeenCalled()
     expect(window.sessionStorage.getItem("threadline:demo-workspace:v1")).toBeNull()
   })
 })

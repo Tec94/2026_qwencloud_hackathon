@@ -1,4 +1,4 @@
-import { BrainCircuitIcon, CheckCircle2Icon, GaugeIcon, ShieldCheckIcon } from "lucide-react"
+import { BrainCircuitIcon, GaugeIcon, ShieldCheckIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker"
@@ -18,12 +18,16 @@ const categoryLabels: Record<string, string> = {
 
 export function MemoryTrace({
   trace,
+  hasRun = false,
   showTitle = true,
 }: {
   trace: RetrievalTrace | null
+  /** True once at least one response has completed a retrieval pass. */
+  hasRun?: boolean
   showTitle?: boolean
 }) {
   const selected = trace?.selectedMemories ?? []
+  const ranWithNoMatch = hasRun && selected.length === 0
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-5">
@@ -50,7 +54,7 @@ export function MemoryTrace({
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pe-1">
         {selected.length > 0 ? (
-          <ol className="flex flex-col gap-3">
+          <ol className="flex flex-col gap-3" aria-label="Selected memories">
             {selected.map((memory, index) => {
               const score = Math.round(memory.score * 100)
               return (
@@ -108,11 +112,23 @@ export function MemoryTrace({
           <div className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border p-5 text-center">
             <BrainCircuitIcon className="text-muted-foreground" aria-hidden="true" />
             <div className="flex max-w-xs flex-col gap-1">
-              <p className="text-sm font-medium">No approved context selected</p>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                The first reply begins without a stored memory. Approved details
-                will appear here only when they are relevant.
-              </p>
+              {ranWithNoMatch ? (
+                <>
+                  <p className="text-sm font-medium">No eligible memory matched</p>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Approved memories were checked for this response and none were
+                    selected.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium">No memory check has run yet</p>
+                  <p className="text-sm leading-relaxed text-muted-foreground">
+                    Send a message and Threadline will show any approved memory it
+                    selects here, with the reason.
+                  </p>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -146,15 +162,6 @@ export function MemoryTrace({
           <dd className="font-medium">{trace?.promptVersion ?? "threadline-v1"}</dd>
         </div>
       </dl>
-
-      {trace?.transcriptDeleted ? (
-        <Marker>
-          <MarkerIcon>
-            <CheckCircle2Icon />
-          </MarkerIcon>
-          <MarkerContent>Transcript deletion recorded</MarkerContent>
-        </Marker>
-      ) : null}
     </div>
   )
 }

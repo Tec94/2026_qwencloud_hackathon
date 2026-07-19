@@ -8,11 +8,11 @@ import { MemoryTrace } from "./memory-trace"
 afterEach(cleanup)
 
 describe("MemoryTrace", () => {
-  it("explains an empty retrieval without implying hidden context", () => {
+  it("explains that no memory check has run yet before the first retrieval", () => {
     render(<MemoryTrace trace={null} />)
 
     expect(screen.getByRole("heading", { name: "Memory Trace" })).toBeVisible()
-    expect(screen.getByText("No approved context selected")).toBeVisible()
+    expect(screen.getByText("No memory check has run yet")).toBeVisible()
     expect(screen.getByText("0/3200 chars")).toBeVisible()
     expect(screen.getByText("qwen3.7-plus")).toBeVisible()
     expect(
@@ -20,9 +20,17 @@ describe("MemoryTrace", () => {
     ).toBeVisible()
   })
 
+  it("distinguishes a completed retrieval with no match from not-run", () => {
+    render(<MemoryTrace trace={null} hasRun />)
+
+    expect(screen.getByText("No eligible memory matched")).toBeVisible()
+    expect(screen.queryByText("No memory check has run yet")).not.toBeInTheDocument()
+  })
+
   it("renders selected memories and every normalized score component", () => {
     render(
       <MemoryTrace
+        hasRun
         trace={{
           candidateCount: 7,
           contextCharacters: 248,
@@ -30,7 +38,6 @@ describe("MemoryTrace", () => {
           model: "qwen3.7-plus",
           promptVersion: "threadline-v2",
           latencyMs: 143,
-          transcriptDeleted: true,
           selectedMemories: [
             {
               id: "memory-1",
@@ -62,13 +69,12 @@ describe("MemoryTrace", () => {
     expect(screen.getByText("248/3200 chars")).toBeVisible()
     expect(screen.getByText("143 ms")).toBeVisible()
     expect(screen.getByText("threadline-v2")).toBeVisible()
-    expect(screen.getByText("Transcript deletion recorded")).toBeVisible()
   })
 
   it("can omit the duplicate title when composed inside a Sheet", () => {
     render(<MemoryTrace trace={null} showTitle={false} />)
 
     expect(screen.queryByRole("heading", { name: "Memory Trace" })).not.toBeInTheDocument()
-    expect(screen.getByText("No approved context selected")).toBeVisible()
+    expect(screen.getByText("No memory check has run yet")).toBeVisible()
   })
 })

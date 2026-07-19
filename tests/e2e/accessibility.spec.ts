@@ -80,12 +80,16 @@ test("patient dashboard and clinician review have no automated WCAG A/AA violati
     page.getByRole("textbox", { name: "Share what is on your mind" }),
   ).toBeEnabled({ timeout: 20_000 });
   await sendReflection(page, "Paced breathing helps me prepare for difficult meetings.");
-  await page.getByRole("button", { name: "End session" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "Session ready for review" })).toBeVisible({
+  await page.getByRole("button", { name: "End & create review" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "End & create review" })
+    .click();
+  await expect(page.getByRole("alert").filter({ hasText: "Review package created" })).toBeVisible({
     timeout: 20_000,
   });
 
-  await page.getByRole("button", { name: "Switch role" }).click();
+  await page.getByRole("button", { name: "View as Dr. Chen" }).click();
   await expect(page).toHaveURL(/\/clinician$/, { timeout: 20_000 });
   const openReview = page.getByRole("link", { name: /Open next review|Review session/ }).first();
   await expect(openReview).toBeVisible();
@@ -112,6 +116,6 @@ test("mobile session exposes Memory Trace in an accessible sheet without overflo
   await page.getByRole("button", { name: "Memory Trace" }).click();
   const traceSheet = page.getByRole("dialog", { name: "Memory Trace" });
   await expect(traceSheet).toBeVisible();
-  await expect(traceSheet.getByText("No approved context selected")).toBeVisible();
+  await expect(traceSheet.getByText("No memory check has run yet")).toBeVisible();
   await expectNoWcagAaViolations(page, "mobile Memory Trace sheet");
 });

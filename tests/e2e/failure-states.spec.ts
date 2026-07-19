@@ -84,7 +84,11 @@ test.describe("deterministic failure presentation fixtures", () => {
     await expect(
       page.getByRole("region", { name: "Reflection conversation" }),
     ).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
-    await page.getByRole("button", { name: "End session" }).click();
+    await page.getByRole("button", { name: "End & create review" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "End & create review" })
+      .click();
 
     await expect(
       page.getByRole("alert").filter({ hasText: "The session needs your attention" }),

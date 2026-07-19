@@ -192,6 +192,7 @@ These documents support implementation review and the hackathon submission.
 - [Five-minute target demo script](docs/demo-script.md)
 - [Pitch deck outline](docs/pitch-outline.md)
 - [Skill integration evidence checklist](docs/skill-integration.md)
+- [Frontend redesign master prompt](docs/frontend-redesign-prompt.md)
 
 ## Safety and privacy boundaries
 
